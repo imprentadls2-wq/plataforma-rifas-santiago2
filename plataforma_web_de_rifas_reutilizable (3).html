@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plataforma Profesional de Rifas & Sorteos</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              100: '#ffe4e6',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              900: '#881337',
+            },
+            gold: {
+              400: '#fbbf24',
+              500: '#f59e0b',
+              600: '#d97706',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 4s ease-in-out infinite',
+            'shimmer': 'shimmer 2s linear infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-10px)' },
+            },
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- React & Babel Core -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Supabase JS Library for backend integration -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      overflow-x: hidden;
+    }
+
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Glassmorphism effects */
+    .glass-card {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .glass-card-gold {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(17, 24, 39, 0.8) 100%);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* 3D Ticket Card Effects */
+    .promo-card-3d {
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transform-style: preserve-3d;
+      perspective: 1000px;
+    }
+
+    .promo-card-3d:hover {
+      transform: translateY(-8px) rotateX(4deg) scale(1.02);
+      box-shadow: 0 20px 30px -10px rgba(225, 29, 72, 0.3);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Printable Ticket Styles */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-receipt, #printable-receipt * {
+        visibility: visible;
+      }
+      #printable-receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        color: #000;
+        background: #fff !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- INITIAL CONFIGURATION FOR RIFAS MULTI-EDITION ---
+    const DEFAULT_RAFFLE_DATA = {
+      id: "rifa-2026-001",
+      title: "Gran Sorteo Millonario Santiago",
+      subtitle: "¡Ganá un iPhone 17 Pro Max, una PS5 o $300.000 en efectivo!",
+      description: "Participá en nuestro gran sorteo transparente. Los números se asignan de forma oficial al verificar el pago por WhatsApp.",
+      startNum: 1,
+      endNum: 9999,
+      digits: 4,
+      drawDate: "2026-12-20",
+      drawNoticeText: "Sorteo según la Tómbola Santiagueña Nocturna una vez completada la venta.",
+      status: "in_progress", // in_progress, paused, closed
+      adminPhone: "5493851234567",
+      winners: [], // [{position: 1, number: '0452', prize: 'iPhone 17'}, ...]
+      prizes: [
+        { id: 1, name: "iPhone 17 Pro Max (256GB Titanium)", desc: "Nuevo de paquete sellado con garantía oficial", image: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=600&q=80" },
+        { id: 2, name: "PlayStation 5 Slim (1TB Digital)", desc: "Incluye 2 Joysticks DualSense + Juego Digital", image: "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=600&q=80" },
+        { id: 3, name: "$300.000 En Efectivo", desc: "Transferencia bancaria inmediata o billetes en mano", image: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=600&q=80" }
+      ],
+      promotions: [
+        { id: "p1", chances: 1, price: 5000, label: "Individual", recommended: false },
+        { id: "p2", chances: 3, price: 12000, label: "Popular", recommended: true },
+        { id: "p3", chances: 5, price: 18000, label: "Super Pack", recommended: false },
+        { id: "p4", chances: 10, price: 30000, label: "Ultra Pack Súper Ahorro", recommended: false }
+      ],
+      rulesText: "1. La reserva mediante la solicitud de compra no asegura los números hasta haber enviado el comprobante de pago por WhatsApp y haber sido verificado por el administrador.\n2. Las solicitudes permanecen pendientes hasta su confirmación o cancelación manual por parte de la administración.\n3. Los números son asignados por el servidor de forma aleatoria y definitiva únicamente al momento de la confirmación."
+    };
+
+    // --- SECURE STORAGE & DATABASE ENGINE INTERFACE ---
+    class DatabaseEngine {
+      static STORAGE_KEY_RAFFLES = 'raffle_system_multi_v2';
+      static STORAGE_KEY_ORDERS = 'raffle_system_orders_v2';
+      static STORAGE_KEY_LOGS = 'raffle_system_logs_v2';
+      static STORAGE_KEY_AUTH = 'raffle_system_auth_token';
+
+      static getRaffles() {
+        const data = localStorage.getItem(this.STORAGE_KEY_RAFFLES);
+        return data ? JSON.parse(data) : [DEFAULT_RAFFLE_DATA];
+      }
+
+      static getActiveRaffle() {
+        const raffles = this.getRaffles();
+        return raffles[0] || DEFAULT_RAFFLE_DATA;
+      }
+
+      static saveRaffleConfig(updatedConfig) {
+        const raffles = this.getRaffles();
+        const idx = raffles.findIndex(r => r.id === updatedConfig.id);
+        if (idx >= 0) raffles[idx] = updatedConfig;
+        else raffles.unshift(updatedConfig);
+
+        localStorage.setItem(this.STORAGE_KEY_RAFFLES, JSON.stringify(raffles));
+        this.logAudit("Configuración de Rifa actualizada: " + updatedConfig.title, "Admin");
+      }
+
+      static getOrders(raffleId) {
+        const data = localStorage.getItem(this.STORAGE_KEY_ORDERS);
+        const allOrders = data ? JSON.parse(data) : [];
+        return raffleId ? allOrders.filter(o => o.raffleId === raffleId) : allOrders;
+      }
+
+      static saveOrders(orders) {
+        localStorage.setItem(this.STORAGE_KEY_ORDERS, JSON.stringify(orders));
+      }
+
+      static getLogs() {
+        const data = localStorage.getItem(this.STORAGE_KEY_LOGS);
+        return data ? JSON.parse(data) : [];
+      }
+
+      static logAudit(action, user = "Sistema", details = "") {
+        const logs = this.getLogs();
+        logs.unshift({
+          id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          timestamp: new Date().toISOString(),
+          action,
+          user,
+          details
+        });
+        localStorage.setItem(this.STORAGE_KEY_LOGS, JSON.stringify(logs.slice(0, 300)));
+      }
+
+      static createPurchaseRequest(raffleId, buyerInfo, promo) {
+        const orders = this.getOrders();
+        const uniqueCode = 'SOL-' + Math.floor(100000 + Math.random() * 900000);
+
+        const newOrder = {
+          id: uniqueCode,
+          raffleId: raffleId,
+          createdAt: new Date().toISOString(),
+          firstName: buyerInfo.firstName.trim(),
+          lastName: buyerInfo.lastName.trim(),
+          phone: buyerInfo.phone.trim(),
+          promoLabel: promo.label,
+          chancesCount: promo.chances,
+          totalAmount: promo.price,
+          assignedNumbers: [],
+          status: 'pending_payment',
+          paymentConfirmedAt: null
+        };
+
+        orders.unshift(newOrder);
+        this.saveOrders(orders);
+        this.logAudit(`Nueva solicitud ${uniqueCode} registrada por ${buyerInfo.firstName} ${buyerInfo.lastName} (${promo.chances} chances)`, "Público");
+
+        return newOrder;
+      }
+
+      static confirmPaymentAndAssignNumbers(orderId, adminName = "Admin") {
+        const orders = this.getOrders();
+        const order = orders.find(o => o.id === orderId);
+
+        if (!order) throw new Error("Solicitud no encontrada.");
+        if (order.status === 'confirmed') throw new Error("Esta solicitud ya fue confirmada anteriormente.");
+        if (order.status === 'cancelled') throw new Error("No se puede confirmar una solicitud anulada.");
+
+        const raffles = this.getRaffles();
+        const config = raffles.find(r => r.id === order.raffleId) || DEFAULT_RAFFLE_DATA;
+
+        const confirmedOrders = orders.filter(o => o.raffleId === order.raffleId && o.status === 'confirmed');
+        const usedNumbers = new Set();
+        confirmedOrders.forEach(o => o.assignedNumbers.forEach(n => usedNumbers.add(n)));
+
+        const totalNumbersCount = (config.endNum - config.startNum) + 1;
+        const availablePool = [];
+        
+        for (let i = config.startNum; i <= config.endNum; i++) {
+          const numStr = String(i).padStart(config.digits || 4, '0');
+          if (!usedNumbers.has(numStr)) {
+            availablePool.push(numStr);
+          }
+        }
+
+        if (availablePool.length < order.chancesCount) {
+          throw new Error(`Atención: No hay suficientes números libres. Quedan ${availablePool.length} disponibles y la solicitud requiere ${order.chancesCount}.`);
+        }
+
+        const selectedNums = [];
+        for (let i = 0; i < order.chancesCount; i++) {
+          const randIndex = Math.floor(Math.random() * availablePool.length);
+          selectedNums.push(availablePool.splice(randIndex, 1)[0]);
+        }
+
+        order.status = 'confirmed';
+        order.paymentConfirmedAt = new Date().toISOString();
+        order.assignedNumbers = selectedNums;
+
+        this.saveOrders(orders);
+        this.logAudit(`PAGO CONFIRMADO para ${order.id}. Números asignados: [${selectedNums.join(', ')}]`, adminName);
+
+        return order;
+      }
+
+      static cancelOrder(orderId, reason = "Anulada manualmente", adminName = "Admin") {
+        const orders = this.getOrders();
+        const order = orders.find(o => o.id === orderId);
+
+        if (!order) throw new Error("Solicitud no encontrada.");
+
+        order.status = 'cancelled';
+        order.assignedNumbers = [];
+
+        this.saveOrders(orders);
+        this.logAudit(`Solicitud ${orderId} cancelada. Motivo: ${reason}`, adminName);
+      }
+
+      static finalizeRaffleWithWinners(raffleId, winnersArray, adminName = "Admin") {
+        const raffles = this.getRaffles();
+        const raffle = raffles.find(r => r.id === raffleId);
+
+        if (!raffle) throw new Error("Rifa no encontrada.");
+
+        raffle.status = 'closed';
+        raffle.winners = winnersArray;
+        raffle.closedAt = new Date().toISOString();
+
+        this.saveRaffleConfig(raffle);
+        this.logAudit(`Rifa ${raffleId} finalizada con ganadores: ${winnersArray.map(w => '#' + w.position + ': ' + w.number).join(', ')}`, adminName);
+      }
+    }
+
+    function App() {
+      const [view, setView] = useState('public');
+      const [raffles, setRaffles] = useState(DatabaseEngine.getRaffles());
+      const [activeRaffle, setActiveRaffle] = useState(DatabaseEngine.getActiveRaffle());
+      const [orders, setOrders] = useState(DatabaseEngine.getOrders(activeRaffle.id));
+      const [logs, setLogs] = useState(DatabaseEngine.getLogs());
+
+      const [selectedPromo, setSelectedPromo] = useState(null);
+      const [buyerInfo, setBuyerInfo] = useState({ firstName: '', lastName: '', phone: '', acceptedTerms: false });
+      const [activeOrder, setActiveOrder] = useState(null);
+      const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+      
+      const [lookupCode, setLookupCode] = useState('');
+      const [queriedOrder, setQueriedOrder] = useState(null);
+      const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+      const [notification, setNotification] = useState(null);
+
+      const [adminUser, setAdminUser] = useState('');
+      const [adminPass, setAdminPass] = useState('');
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [adminTab, setAdminTab] = useState('overview');
+
+      useEffect(() => {
+        refreshData();
+      }, [activeRaffle.id]);
+
+      const refreshData = () => {
+        const allRaffles = DatabaseEngine.getRaffles();
+        setRaffles(allRaffles);
+        const currentActive = allRaffles.find(r => r.id === activeRaffle.id) || allRaffles[0];
+        setActiveRaffle(currentActive);
+        setOrders(DatabaseEngine.getOrders(currentActive.id));
+        setLogs(DatabaseEngine.getLogs());
+      };
+
+      const showToast = (message, type = 'info') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4000);
+      };
+
+      const stats = useMemo(() => {
+        const totalNumbers = (activeRaffle.endNum - activeRaffle.startNum) + 1;
+        const confirmedOrders = orders.filter(o => o.status === 'confirmed');
+        const pendingOrders = orders.filter(o => o.status === 'pending_payment');
+        
+        let soldCount = 0;
+        confirmedOrders.forEach(o => soldCount += o.assignedNumbers.length);
+
+        let pendingChancesCount = 0;
+        pendingOrders.forEach(o => pendingChancesCount += o.chancesCount);
+
+        const available = Math.max(0, totalNumbers - soldCount);
+        const percentSold = totalNumbers > 0 ? Math.round((soldCount / totalNumbers) * 100) : 0;
+        
+        const totalRevenue = confirmedOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+        const pendingRevenue = pendingOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+
+        return { 
+          totalNumbers, 
+          soldCount, 
+          pendingChancesCount, 
+          available, 
+          percentSold, 
+          confirmedOrders, 
+          pendingOrders, 
+          totalRevenue, 
+          pendingRevenue 
+        };
+      }, [activeRaffle, orders]);
+
+      const handleStartReservation = (promo) => {
+        if (activeRaffle.status !== 'in_progress') {
+          showToast("Esta rifa no se encuentra disponible para nuevas ventas.", "error");
+          return;
+        }
+        setSelectedPromo(promo);
+        setCheckoutModalOpen(true);
+      };
+
+      const handleConfirmReservation = (e) => {
+        e.preventDefault();
+        if (!buyerInfo.firstName || !buyerInfo.lastName || !buyerInfo.phone) {
+          showToast("Completá todos los datos obligatorios", "error");
+          return;
+        }
+        if (!buyerInfo.acceptedTerms) {
+          showToast("Debes aceptar las bases de participación", "error");
+          return;
+        }
+
+        try {
+          const order = DatabaseEngine.createPurchaseRequest(activeRaffle.id, buyerInfo, selectedPromo);
+          setActiveOrder(order);
+          refreshData();
+          if (window.confetti) {
+            window.confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+          }
+          showToast("¡Solicitud registrada correctamente!", "success");
+        } catch (err) {
+          showToast(err.message, "error");
+        }
+      };
+
+      const getWhatsAppLink = (order) => {
+        const message = `¡Hola! Acabo de registrar mi solicitud en ${activeRaffle.title}.\n\n` +
+          `📌 *Código de Solicitud:* ${order.id}\n` +
+          `👤 *Nombre:* ${order.firstName} ${order.lastName}\n` +
+          `🎟️ *Chances Solicitadas:* ${order.chancesCount} chances (${order.promoLabel})\n` +
+          `💰 *Importe a Abonar:* $${order.totalAmount.toLocaleString('es-AR')}\n\n` +
+          `Adjunto comprobante de pago para recibir mis números. ¡Muchas gracias!`;
+        return `https://wa.me/${activeRaffle.adminPhone}?text=${encodeURIComponent(message)}`;
+      };
+
+      const handleAdminLogin = (e) => {
+        e.preventDefault();
+        if (adminUser === 'Nicodelasilva' && adminPass === 'Rifas2026!') {
+          setIsLoggedIn(true);
+          setView('admin_dashboard');
+          DatabaseEngine.logAudit("Inicio de sesión administrador exitoso", adminUser);
+          showToast("Autenticado como Administrador", "success");
+        } else {
+          showToast("Usuario o contraseña incorrectos.", "error");
+        }
+      };
+
+      return (
+        <div className="min-h-screen text-gray-100 flex flex-col justify-between selection:bg-brand-500 selection:text-white">
+          
+          {notification && (
+            <div className={`fixed top-5 right-5 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center space-x-3 border ${
+              notification.type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' :
+              notification.type === 'success' ? 'bg-emerald-900/90 border-emerald-500 text-emerald-100' :
+              'bg-blue-900/90 border-blue-500 text-blue-100'
+            } backdrop-blur-md animate-bounce`}>
+              <i className={`fas ${notification.type === 'error' ? 'fa-exclamation-circle' : notification.type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} text-xl`}></i>
+              <span className="font-medium text-sm md:text-base">{notification.message}</span>
+            </div>
+          )}
+
+          <header className="sticky top-0 z-40 glass-card border-b border-gray-800">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setView('public')}>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-gold-500 flex items-center justify-center shadow-lg shadow-brand-600/30">
+                  <i className="fas fa-ticket-alt text-white text-lg"></i>
+                </div>
+                <div>
+                  <h1 className="font-bold text-lg leading-none bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gold-400">
+                    {activeRaffle.title}
+                  </h1>
+                  <p className="text-xs text-gray-400 font-light mt-0.5">Plataforma Oficial de Sorteos</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                {view === 'public' ? (
+                  <button 
+                    onClick={() => setView(isLoggedIn ? 'admin_dashboard' : 'admin_login')}
+                    className="text-xs md:text-sm font-semibold px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition flex items-center space-x-2">
+                    <i className="fas fa-lock text-brand-500"></i>
+                    <span>{isLoggedIn ? 'Panel Admin' : 'Acceso Admin'}</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setView('public')}
+                    className="text-xs md:text-sm font-semibold px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white transition flex items-center space-x-2">
+                    <i className="fas fa-globe"></i>
+                    <span>Ver Sitio Público</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </header>
+
+          <main className="mb-auto">
+            {view === 'public' && (
+              <PublicRaffleView 
+                config={activeRaffle} 
+                stats={stats} 
+                orders={orders} 
+                onSelectPromo={handleStartReservation}
+                setLookupCode={setLookupCode}
+                lookupCode={lookupCode}
+                onSearchOrder={() => {
+                  const found = orders.find(o => o.id.toLowerCase() === lookupCode.trim().toLowerCase());
+                  if (found) {
+                    setQueriedOrder(found);
+                    setReceiptModalOpen(true);
+                  } else {
+                    showToast("No se encontró ninguna solicitud con ese código.", "error");
+                  }
+                }}
+              />
+            )}
+
+            {view === 'admin_login' && (
+              <AdminLoginView 
+                user={adminUser} 
+                setUser={setAdminUser} 
+                pass={adminPass} 
+                setPass={setAdminPass} 
+                onLogin={handleAdminLogin} 
+              />
+            )}
+
+            {view === 'admin_dashboard' && isLoggedIn && (
+              <AdminDashboardView 
+                raffles={raffles}
+                activeRaffle={activeRaffle}
+                setActiveRaffle={setActiveRaffle}
+                stats={stats} 
+                orders={orders} 
+                logs={logs} 
+                adminTab={adminTab} 
+                setAdminTab={setAdminTab} 
+                onRefresh={refreshData}
+                showToast={showToast}
+              />
+            )}
+          </main>
+
+          {checkoutModalOpen && selectedPromo && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <div className="glass-card max-w-lg w-full rounded-2xl border border-gray-700 overflow-hidden shadow-2xl relative animate-scaleUp">
+                
+                <button 
+                  onClick={() => { setCheckoutModalOpen(false); setActiveOrder(null); }}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition">
+                  <i className="fas fa-times"></i>
+                </button>
+
+                {!activeOrder ? (
+                  <div className="p-6">
+                    <div className="text-center mb-6">
+                      <span className="px-3 py-1 bg-brand-500/20 text-brand-400 border border-brand-500/30 text-xs font-bold rounded-full uppercase tracking-wider">
+                        Paso 1 de 2: Formulario de Registro
+                      </span>
+                      <h3 className="text-2xl font-bold text-white mt-2">Solicitar Paquete de Chances</h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Elegiste: <strong className="text-gold-400">{selectedPromo.label} ({selectedPromo.chances} chances)</strong> por ${selectedPromo.price.toLocaleString('es-AR')}
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleConfirmReservation} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Nombre</label>
+                        <input 
+                          type="text" 
+                          required 
+                          placeholder="Ej. Nicolas"
+                          value={buyerInfo.firstName}
+                          onChange={(e) => setBuyerInfo({...buyerInfo, firstName: e.target.value})}
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Apellido</label>
+                        <input 
+                          type="text" 
+                          required 
+                          placeholder="Ej. Silva"
+                          value={buyerInfo.lastName}
+                          onChange={(e) => setBuyerInfo({...buyerInfo, lastName: e.target.value})}
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">WhatsApp de Contacto</label>
+                        <input 
+                          type="tel" 
+                          required 
+                          placeholder="Ej. 3851234567"
+                          value={buyerInfo.phone}
+                          onChange={(e) => setBuyerInfo({...buyerInfo, phone: e.target.value})}
+                          className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
+                      <div className="flex items-start space-x-3 pt-2">
+                        <input 
+                          type="checkbox" 
+                          id="terms" 
+                          required
+                          checked={buyerInfo.acceptedTerms}
+                          onChange={(e) => setBuyerInfo({...buyerInfo, acceptedTerms: e.target.checked})}
+                          className="mt-1 w-4 h-4 rounded border-gray-700 text-brand-600 focus:ring-brand-500 bg-gray-900"
+                        />
+                        <label htmlFor="terms" className="text-xs text-gray-400 leading-tight cursor-pointer">
+                          Entiendo que la presente solicitud no garantiza los números hasta enviar el comprobante y ser verificado por WhatsApp.
+                        </label>
+                      </div>
+
+                      <button 
+                        type="submit" 
+                        className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-600 to-gold-500 hover:from-brand-500 hover:to-gold-400 text-white font-bold text-lg shadow-lg shadow-brand-600/30 transition transform hover:-translate-y-0.5">
+                        Generar Solicitud de Compra
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto text-3xl">
+                      <i className="fas fa-check-circle"></i>
+                    </div>
+
+                    <h3 className="text-2xl font-bold text-white">¡Solicitud Registrada!</h3>
+
+                    <div className="p-4 rounded-2xl bg-gray-900 border border-gray-800 text-left space-y-2">
+                      <p className="text-sm text-gray-300">
+                        Ya tenés tu pedido de <strong className="text-gold-400">{activeOrder.chancesCount} chances</strong> por un total de <strong className="text-emerald-400">${activeOrder.totalAmount.toLocaleString('es-AR')}</strong>.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Código Único de Solicitud: <span className="font-mono-num font-bold text-white px-2 py-0.5 bg-gray-800 rounded">{activeOrder.id}</span>
+                      </p>
+                      <p className="text-xs text-amber-400/90 pt-2 border-t border-gray-800">
+                        <i className="fas fa-info-circle mr-1"></i>
+                        Enviá tu comprobante de pago por WhatsApp indicando tu código de solicitud. Una vez verificado el pago, recibirás tus números oficiales.
+                      </p>
+                    </div>
+
+                    <a 
+                      href={getWhatsAppLink(activeOrder)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/30 transition transform hover:-translate-y-0.5">
+                      <i className="fab fa-whatsapp text-2xl"></i>
+                      <span>Enviar Comprobante por WhatsApp</span>
+                    </a>
+
+                    <div className="text-xs text-gray-500 pt-2">
+                      ¿Problemas para abrir? WhatsApp de Administración: <strong className="text-gray-300">+{activeRaffle.adminPhone}</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {receiptModalOpen && queriedOrder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <div className="glass-card max-w-lg w-full rounded-2xl border border-gray-700 overflow-hidden shadow-2xl relative p-6">
+                <button 
+                  onClick={() => setReceiptModalOpen(false)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition no-print">
+                  <i className="fas fa-times"></i>
+                </button>
+
+                <div id="printable-receipt" className="space-y-4">
+                  <div className="text-center border-b border-gray-800 pb-4">
+                    <span className={`inline-block px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider mb-2 ${
+                      queriedOrder.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                      queriedOrder.status === 'pending_payment' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                      'bg-red-500/20 text-red-400 border border-red-500/30'
+                    }`}>
+                      {queriedOrder.status === 'confirmed' ? 'COMPRA CONFIRMADA - NÚMEROS ASIGNADOS' :
+                       queriedOrder.status === 'pending_payment' ? 'SOLICITUD PENDIENTE DE PAGO' : 'SOLICITUD CANCELADA'}
+                    </span>
+                    <h3 className="text-xl font-bold text-white">{activeRaffle.title}</h3>
+                    <p className="text-xs text-gray-400">Código de Solicitud: {queriedOrder.id}</p>
+                  </div>
+
+                  <div className="text-sm space-y-2 text-gray-300">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Titular:</span>
+                      <span className="font-semibold">{queriedOrder.firstName} {queriedOrder.lastName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Fecha de Registro:</span>
+                      <span>{new Date(queriedOrder.createdAt).toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+
+                  {queriedOrder.status === 'confirmed' ? (
+                    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
+                      <div className="text-xs uppercase font-semibold text-gold-400 mb-2">Números Asignados Oficialmente:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {queriedOrder.assignedNumbers.map(num => (
+                          <span key={num} className="font-mono-num font-bold px-3 py-1 bg-gold-500/20 text-gold-400 border border-gold-500/40 rounded text-sm">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-950/40 p-4 rounded-xl border border-amber-800/40 text-xs text-amber-300">
+                      Los números de esta solicitud se asignarán de forma definitiva en cuanto la administración confirme la recepción del comprobante de pago por WhatsApp.
+                    </div>
+                  )}
+
+                  <div className="border-t border-gray-800 pt-3 flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Importe Total:</span>
+                    <span className="text-2xl font-bold text-emerald-400">${queriedOrder.totalAmount.toLocaleString('es-AR')}</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3 no-print">
+                  <button 
+                    onClick={() => window.print()}
+                    className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-semibold text-sm transition flex items-center justify-center space-x-2">
+                    <i className="fas fa-print"></i>
+                    <span>Imprimir Cupón</span>
+                  </button>
+                  <button 
+                    onClick={() => setReceiptModalOpen(false)}
+                    className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <footer className="glass-card border-t border-gray-800 py-6 text-center text-xs text-gray-500 mt-12">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <p>© 2026 {activeRaffle.title}. Sistema con Asignación Servidor Transaccional.</p>
+              <div className="flex items-center space-x-4">
+                <span className="text-emerald-400 flex items-center"><i className="fas fa-shield-alt mr-1"></i> Verificación Manual WhatsApp</span>
+              </div>
+            </div>
+          </footer>
+
+        </div>
+      );
+    }
+
+    function PublicRaffleView({ config, stats, orders, onSelectPromo, lookupCode, setLookupCode, onSearchOrder }) {
+      const confirmedNumbersSet = useMemo(() => {
+        const set = new Set();
+        orders.filter(o => o.status === 'confirmed').forEach(o => {
+          o.assignedNumbers.forEach(n => set.add(n));
+        });
+        return set;
+      }, [orders]);
+
+      return (
+        <div className="max-w-7xl mx-auto px-4 py-8 space-y-12">
+          
+          {config.status === 'closed' && config.winners && config.winners.length > 0 && (
+            <section className="glass-card-gold p-8 rounded-3xl border-2 border-gold-500/50 shadow-2xl space-y-6 text-center relative overflow-hidden">
+              <div className="inline-block px-4 py-1.5 bg-gold-500 text-black font-black text-xs rounded-full uppercase tracking-widest shadow-lg">
+                ¡Sorteo Finalizado - Ganadores Oficiales!
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                {config.winners.map((winner, idx) => (
+                  <div key={idx} className="bg-gray-900/90 p-6 rounded-2xl border border-gold-500/30 flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-full bg-gold-500/20 text-gold-400 flex items-center justify-center text-xl font-bold mb-3 border border-gold-500/40">
+                      #{winner.position || idx + 1}
+                    </div>
+                    <span className="text-xs text-gray-400 uppercase font-semibold">Número Ganador</span>
+                    <div className="text-4xl font-black text-gold-400 font-mono-num my-2 tracking-widest">
+                      {winner.number}
+                    </div>
+                    <div className="text-sm font-bold text-white">{winner.prize || `Premio #${idx + 1}`}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="relative rounded-3xl overflow-hidden border border-gray-800 bg-gradient-to-b from-gray-900 via-gray-900/90 to-gray-950 p-6 md:p-12 shadow-2xl">
+            <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 -mb-12 -ml-12 w-96 h-96 bg-gold-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="relative z-10 grid md:grid-cols-12 gap-8 items-center">
+              <div className="md:col-span-7 space-y-6">
+                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                  <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping mr-2"></span>
+                  {config.status === 'in_progress' ? 'Sorteo Oficial en Cierre' : 'Sorteo Finalizado'}
+                </span>
+
+                <h2 className="text-4xl md:text-6xl font-extrabold text-white leading-tight tracking-tight">
+                  {config.title}
+                </h2>
+
+                <p className="text-lg text-gray-300 font-light">
+                  {config.subtitle}
+                </p>
+
+                <div className="p-6 rounded-2xl glass-card space-y-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-semibold text-gray-300">Progreso de Venta Confirmada</span>
+                    <span className="font-bold text-gold-400 text-lg">{stats.percentSold}% Vendido</span>
+                  </div>
+
+                  <div className="w-full bg-gray-800 h-4 rounded-full overflow-hidden p-0.5 border border-gray-700">
+                    <div 
+                      className="bg-gradient-to-r from-brand-600 via-gold-500 to-emerald-400 h-full rounded-full transition-all duration-1000 shadow-lg"
+                      style={{ width: `${stats.percentSold}%` }}>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center pt-2">
+                    <div className="p-2 rounded-lg bg-emerald-950/30 border border-emerald-800/40">
+                      <div className="text-xs text-gray-400">Disponibles</div>
+                      <div className="text-xl font-bold text-emerald-400 font-mono-num">{stats.available}</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/40">
+                      <div className="text-xs text-gray-400">Solicitudes Pendientes</div>
+                      <div className="text-xl font-bold text-amber-400 font-mono-num">{stats.pendingOrders.length}</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-brand-950/30 border border-brand-800/40 col-span-2 sm:col-span-1">
+                      <div className="text-xs text-gray-400">Números Vendidos</div>
+                      <div className="text-xl font-bold text-brand-400 font-mono-num">{stats.soldCount}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                  <div className="flex items-center space-x-2">
+                    <i className="fas fa-calendar-alt text-brand-500 text-base"></i>
+                    <span>Fecha Estimada: <strong>{config.drawDate}</strong></span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <i className="fas fa-info-circle text-gold-400 text-base"></i>
+                    <span>{config.drawNoticeText}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-5 space-y-4">
+                <div className="text-xs uppercase font-bold text-gold-400 tracking-wider">Premios Principales</div>
+                <div className="space-y-3">
+                  {config.prizes.map((prize, idx) => (
+                    <div key={prize.id} className="glass-card p-3 rounded-2xl flex items-center space-x-4 hover:border-gold-500/40 transition">
+                      <img src={prize.image} alt={prize.name} className="w-20 h-20 object-cover rounded-xl border border-gray-700" />
+                      <div>
+                        <span className="text-xs font-bold text-gold-400 uppercase">Premio #{idx + 1}</span>
+                        <h4 className="font-bold text-white leading-snug">{prize.name}</h4>
+                        <p className="text-xs text-gray-400 mt-1">{prize.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {config.status === 'in_progress' && (
+            <section className="space-y-6">
+              <div className="text-center space-y-2">
+                <h3 className="text-3xl font-extrabold text-white">Elegí tu Paquete de Chances</h3>
+                <p className="text-sm text-gray-400">Números asignados de forma aleatoria por el servidor al verificar el pago por WhatsApp.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {config.promotions.map((promo) => (
+                  <div 
+                    key={promo.id}
+                    className={`promo-card-3d rounded-3xl p-6 flex flex-col justify-between relative border ${
+                      promo.recommended 
+                        ? 'glass-card-gold shadow-xl shadow-gold-500/10' 
+                        : 'glass-card border-gray-800 hover:border-gray-700'
+                    }`}>
+                    
+                    {promo.recommended && (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-gold-500 to-amber-600 text-black font-extrabold text-xs rounded-full uppercase shadow-lg">
+                        ¡Más Vendido!
+                      </span>
+                    )}
+
+                    <div>
+                      <div className="text-center pb-4 border-b border-gray-800/80">
+                        <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">{promo.label}</span>
+                        <div className="text-5xl font-black text-white mt-2 font-mono-num">
+                          {promo.chances}
+                        </div>
+                        <span className="text-xs text-gray-400 uppercase font-semibold">Chances de Ganar</span>
+                      </div>
+
+                      <div className="py-6 text-center space-y-1">
+                        <div className="text-xs text-gray-400">Precio Total del Paquete</div>
+                        <div className="text-3xl font-bold text-emerald-400 font-mono-num">
+                          ${promo.price.toLocaleString('es-AR')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => onSelectPromo(promo)}
+                      className={`w-full py-4 rounded-xl font-bold text-sm transition flex items-center justify-center space-x-2 shadow-lg ${
+                        promo.recommended 
+                          ? 'bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-black' 
+                          : 'bg-brand-600 hover:bg-brand-500 text-white'
+                      }`}>
+                      <i className="fas fa-shopping-cart"></i>
+                      <span>Solicitar Chances</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="glass-card p-6 rounded-2xl max-w-xl mx-auto text-center space-y-4">
+            <h4 className="font-bold text-white text-lg">¿Ya compraste o enviaste comprobante?</h4>
+            <p className="text-xs text-gray-400">Ingresá tu código de solicitud (ej. SOL-123456) para consultar el estado o imprimir tu cupón de participación.</p>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Código de Solicitud..."
+                value={lookupCode}
+                onChange={(e) => setLookupCode(e.target.value)}
+                className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white font-mono-num text-sm focus:outline-none focus:border-brand-500"
+              />
+              <button 
+                onClick={onSearchOrder}
+                className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded-xl font-semibold text-sm transition">
+                Consultar
+              </button>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-white">Transparencia de Números Emitidos</h3>
+                <p className="text-xs text-gray-400">Visualización general de disponibilidad (Rangos del {config.startNum} al {config.endNum}).</p>
+              </div>
+              <div className="flex space-x-3 text-xs">
+                <span className="flex items-center space-x-1"><span className="w-3 h-3 rounded-full bg-emerald-500"></span><span className="text-gray-400">Libre</span></span>
+                <span className="flex items-center space-x-1"><span className="w-3 h-3 rounded-full bg-brand-600"></span><span className="text-gray-400">Vendido Confirmado</span></span>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl text-center text-xs text-gray-400">
+              <p>Muestra resumida de estado de la matriz ({stats.soldCount} de {stats.totalNumbers} asignados oficialmente):</p>
+              <div className="mt-3 flex flex-wrap gap-1.5 justify-center max-h-48 overflow-y-auto p-2">
+                {Array.from({ length: Math.min(200, config.endNum - config.startNum + 1) }).map((_, i) => {
+                  const numStr = String(config.startNum + i).padStart(config.digits || 4, '0');
+                  const isSold = confirmedNumbersSet.has(numStr);
+                  return (
+                    <span 
+                      key={numStr}
+                      className={`px-2 py-1 rounded font-mono-num text-[11px] font-bold ${
+                        isSold 
+                          ? 'bg-brand-950 text-brand-300 border border-brand-800' 
+                          : 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40'
+                      }`}>
+                      {numStr}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="glass-card p-8 rounded-3xl space-y-4">
+            <h3 className="text-xl font-bold text-white flex items-center">
+              <i className="fas fa-file-contract text-brand-500 mr-3"></i>
+              Bases, Reglas y Condiciones Transparentes
+            </h3>
+            <div className="text-sm text-gray-300 whitespace-pre-line leading-relaxed">
+              {config.rulesText}
+            </div>
+          </section>
+
+        </div>
+      );
+    }
+
+    function AdminLoginView({ user, setUser, pass, setPass, onLogin }) {
+      return (
+        <div className="max-w-md mx-auto px-4 py-20">
+          <div className="glass-card p-8 rounded-3xl border border-gray-800 shadow-2xl space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 rounded-2xl bg-brand-600/20 text-brand-500 border border-brand-500/30 flex items-center justify-center mx-auto text-2xl">
+                <i className="fas fa-user-shield"></i>
+              </div>
+              <h2 className="text-2xl font-bold text-white">Acceso al Panel Privado</h2>
+              <p className="text-xs text-gray-400">Autenticación requerida para gestión de ventas</p>
+            </div>
+
+            <form onSubmit={onLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Usuario</label>
+                <input 
+                  type="text" 
+                  required
+                  value={user}
+                  onChange={(e) => setUser(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 font-mono-num text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Contraseña</label>
+                <input 
+                  type="password" 
+                  required
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 text-sm"
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full py-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-base transition shadow-lg shadow-brand-600/30">
+                Iniciar Sesión
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminDashboardView({ raffles, activeRaffle, setActiveRaffle, stats, orders, logs, adminTab, setAdminTab, onRefresh, showToast }) {
+      const [winnersInput, setWinnersInput] = useState([
+        { position: 1, number: '', prize: activeRaffle.prizes[0]?.name || 'Premio 1' },
+        { position: 2, number: '', prize: activeRaffle.prizes[1]?.name || 'Premio 2' },
+        { position: 3, number: '', prize: activeRaffle.prizes[2]?.name || 'Premio 3' }
+      ]);
+
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const handleConfirmOrder = (orderId) => {
+        if (confirm(`¿Confirmar la recepción del pago para la solicitud ${orderId}? Se asignarán los números aleatorios de forma definitiva.`)) {
+          try {
+            DatabaseEngine.confirmPaymentAndAssignNumbers(orderId, "Nicodelasilva");
+            onRefresh();
+            showToast(`Pago de solicitud ${orderId} confirmado exitosamente.`, "success");
+          } catch (err) {
+            showToast(err.message, "error");
+          }
+        }
+      };
+
+      const handleCancelOrder = (orderId) => {
+        if (confirm(`¿Anular la solicitud ${orderId}?`)) {
+          try {
+            DatabaseEngine.cancelOrder(orderId, "Anulada manualmente por administrador", "Nicodelasilva");
+            onRefresh();
+            showToast(`Solicitud ${orderId} anulada.`, "info");
+          } catch (err) {
+            showToast(err.message, "error");
+          }
+        }
+      };
+
+      const handleFinalizeRaffle = (e) => {
+        e.preventDefault();
+        
+        for (let w of winnersInput) {
+          if (!w.number || w.number.length !== (activeRaffle.digits || 4)) {
+            showToast(`El número del puesto ${w.position} debe tener exactamente ${activeRaffle.digits || 4} dígitos.`, "error");
+            return;
+          }
+          const numVal = parseInt(w.number, 10);
+          if (isNaN(numVal) || numVal < activeRaffle.startNum || numVal > activeRaffle.endNum) {
+            showToast(`El número ${w.number} está fuera del rango permitido (${activeRaffle.startNum} - ${activeRaffle.endNum}).`, "error");
+            return;
+          }
+        }
+
+        if (confirm(`¿Estás seguro de finalizar la rifa "${activeRaffle.title}" y publicar estos ganadores? Esta acción cerrará la venta.`)) {
+          try {
+            DatabaseEngine.finalizeRaffleWithWinners(activeRaffle.id, winnersInput, "Nicodelasilva");
+            onRefresh();
+            showToast("Sorteo finalizado y ganadores publicados oficialmente.", "success");
+          } catch (err) {
+            showToast(err.message, "error");
+          }
+        }
+      };
+
+      const handleCreateNewRaffle = () => {
+        const newId = 'rifa-' + Date.now();
+        const newRaffle = {
+          ...DEFAULT_RAFFLE_DATA,
+          id: newId,
+          title: "Nueva Rifa " + new Date().toLocaleDateString(),
+          status: "in_progress"
+        };
+        DatabaseEngine.saveRaffleConfig(newRaffle);
+        onRefresh();
+        setActiveRaffle(newRaffle);
+        showToast("Nueva rifa creada con éxito.", "success");
+      };
+
+      const exportToCSV = () => {
+        let csvContent = "data:text/csv;charset=utf-8,ID_Solicitud,Fecha,Nombre,Apellido,Telefono,Chances,Monto,Estado,Numeros_Asignados\n";
+        orders.forEach(o => {
+          const row = [
+            o.id,
+            new Date(o.createdAt).toLocaleString('es-AR'),
+            `"${o.firstName}"`,
+            `"${o.lastName}"`,
+            `"${o.phone}"`,
+            o.chancesCount,
+            o.totalAmount,
+            o.status,
+            `"${o.assignedNumbers.join(';')}"`
+          ].join(",");
+          csvContent += row + "\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Ventas_${activeRaffle.id}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const filteredOrders = useMemo(() => {
+        if (!searchQuery.trim()) return orders;
+        const q = searchQuery.toLowerCase();
+        return orders.filter(o => 
+          o.id.toLowerCase().includes(q) ||
+          o.firstName.toLowerCase().includes(q) ||
+          o.lastName.toLowerCase().includes(q) ||
+          o.phone.includes(q)
+        );
+      }, [orders, searchQuery]);
+
+      return (
+        <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+          
+          <div className="glass-card p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center space-x-3 w-full md:w-auto">
+              <span className="text-xs font-bold text-gray-400 uppercase">Rifa Activa:</span>
+              <select 
+                value={activeRaffle.id}
+                onChange={(e) => {
+                  const selected = raffles.find(r => r.id === e.target.value);
+                  if (selected) setActiveRaffle(selected);
+                }}
+                className="bg-gray-900 border border-gray-700 text-white font-bold text-sm px-4 py-2 rounded-xl focus:outline-none focus:border-brand-500">
+                {raffles.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.title} ({r.status === 'in_progress' ? 'En Curso' : 'Cerrada'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button 
+              onClick={handleCreateNewRaffle}
+              className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-black font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center space-x-2">
+              <i className="fas fa-plus-circle"></i>
+              <span>Crear Nueva Rifa</span>
+            </button>
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-800 pb-6">
+            <div>
+              <h2 className="text-3xl font-bold text-white flex items-center space-x-3">
+                <span>Panel de Control</span>
+                <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${
+                  activeRaffle.status === 'in_progress' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-800 text-gray-400 border-gray-700'
+                }`}>
+                  {activeRaffle.status === 'in_progress' ? 'VENTAS ABIERTAS' : 'FINALIZADA'}
+                </span>
+              </h2>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => setAdminTab('overview')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${adminTab === 'overview' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
+                Resumen
+              </button>
+              <button 
+                onClick={() => setAdminTab('orders')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${adminTab === 'orders' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
+                Solicitudes ({orders.filter(o=>o.status==='pending_payment').length})
+              </button>
+              <button 
+                onClick={() => setAdminTab('finalize')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${adminTab === 'finalize' ? 'bg-gold-500 text-black' : 'bg-gray-800 text-gray-300'}`}>
+                Finalizar / Ganadores
+              </button>
+              <button 
+                onClick={() => setAdminTab('config')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${adminTab === 'config' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
+                Configuración
+              </button>
+              <button 
+                onClick={() => setAdminTab('audit')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${adminTab === 'audit' ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
+                Auditoría
+              </button>
+            </div>
+          </div>
+
+          {adminTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="glass-card p-5 rounded-2xl border border-gray-800 space-y-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase">Recaudación Confirmada</span>
+                  <div className="text-3xl font-bold text-emerald-400 font-mono-num">
+                    ${stats.totalRevenue.toLocaleString('es-AR')}
+                  </div>
+                  <div className="text-xs text-gray-500">{stats.confirmedOrders.length} ventas confirmadas</div>
+                </div>
+
+                <div className="glass-card p-5 rounded-2xl border border-gray-800 space-y-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase">Importe Solicitudes Pendientes</span>
+                  <div className="text-3xl font-bold text-amber-400 font-mono-num">
+                    ${stats.pendingRevenue.toLocaleString('es-AR')}
+                  </div>
+                  <div className="text-xs text-gray-500">{stats.pendingOrders.length} pedidos sin confirmar</div>
+                </div>
+
+                <div className="glass-card p-5 rounded-2xl border border-gray-800 space-y-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase">Números Vendidos</span>
+                  <div className="text-3xl font-bold text-gold-400 font-mono-num">
+                    {stats.soldCount}
+                  </div>
+                  <div className="text-xs text-gray-500">De {stats.totalNumbers} totales en rango</div>
+                </div>
+
+                <div className="glass-card p-5 rounded-2xl border border-gray-800 space-y-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase">Disponibilidad</span>
+                  <div className="text-3xl font-bold text-blue-400 font-mono-num">
+                    {stats.available}
+                  </div>
+                  <div className="text-xs text-gray-500">Libres para asignar</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {adminTab === 'orders' && (
+            <div className="glass-card p-6 rounded-2xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 className="text-xl font-bold text-white">Solicitudes de Compra</h3>
+                <div className="flex items-center space-x-2 w-full sm:w-auto">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por código, nombre o teléfono..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-gray-900 border border-gray-700 text-xs text-white rounded-xl px-4 py-2 focus:outline-none focus:border-brand-500 w-full sm:w-64"
+                  />
+                  <button 
+                    onClick={exportToCSV}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs transition flex items-center space-x-1 whitespace-nowrap">
+                    <i className="fas fa-file-excel mr-1"></i>
+                    <span>Exportar CSV</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-900 text-gray-400 uppercase border-b border-gray-800">
+                    <tr>
+                      <th className="p-3">Fecha y Antigüedad</th>
+                      <th className="p-3">Código</th>
+                      <th className="p-3">Participante</th>
+                      <th className="p-3">Teléfono</th>
+                      <th className="p-3">Chances</th>
+                      <th className="p-3">Importe</th>
+                      <th className="p-3">Números Asignados</th>
+                      <th className="p-3">Estado</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800 text-gray-300">
+                    {filteredOrders.map((o) => {
+                      const hoursOld = Math.floor((new Date() - new Date(o.createdAt)) / (1000 * 60 * 60));
+                      const isOldPending = o.status === 'pending_payment' && hoursOld >= 24;
+
+                      return (
+                        <tr key={o.id} className="hover:bg-gray-900/50">
+                          <td className="p-3 text-gray-400">
+                            <div>{new Date(o.createdAt).toLocaleString('es-AR')}</div>
+                            {o.status === 'pending_payment' && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${isOldPending ? 'bg-red-950 text-red-400 border border-red-800' : 'text-gray-500'}`}>
+                                Hace {hoursOld}h
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 font-mono-num font-bold text-white">{o.id}</td>
+                          <td className="p-3 font-semibold">{o.firstName} {o.lastName}</td>
+                          <td className="p-3">{o.phone}</td>
+                          <td className="p-3">{o.chancesCount}</td>
+                          <td className="p-3 font-bold text-emerald-400">${o.totalAmount.toLocaleString('es-AR')}</td>
+                          <td className="p-3 font-mono-num text-gold-400">
+                            {o.assignedNumbers.length > 0 ? o.assignedNumbers.join(', ') : <span className="text-gray-600 font-sans italic">Sin asignar</span>}
+                          </td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              o.status === 'confirmed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                              o.status === 'pending_payment' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                              'bg-red-950 text-red-400 border border-red-800'
+                            }`}>
+                              {o.status === 'confirmed' ? 'CONFIRMADO' : o.status === 'pending_payment' ? 'PENDIENTE' : 'CANCELADO'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right space-x-1">
+                            {o.status === 'pending_payment' && (
+                              <button 
+                                onClick={() => handleConfirmOrder(o.id)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold transition">
+                                Confirmar Pago
+                              </button>
+                            )}
+                            {o.status !== 'cancelled' && (
+                              <button 
+                                onClick={() => handleCancelOrder(o.id)}
+                                className="px-2.5 py-1 bg-red-800 hover:bg-red-700 text-white rounded font-bold transition">
+                                Anular
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {adminTab === 'finalize' && (
+            <div className="glass-card p-8 rounded-2xl max-w-2xl mx-auto space-y-6">
+              <div className="border-b border-gray-800 pb-4">
+                <h3 className="text-xl font-bold text-white">Finalizar Rifa y Cargar Ganadores Oficiales</h3>
+                <p className="text-xs text-gray-400 mt-1">Ingresá los tres números sorteados respetando el rango ({activeRaffle.startNum} a {activeRaffle.endNum}).</p>
+              </div>
+
+              <form onSubmit={handleFinalizeRaffle} className="space-y-4">
+                {winnersInput.map((w, idx) => (
+                  <div key={idx} className="p-4 bg-gray-900 rounded-xl border border-gray-800 space-y-3">
+                    <span className="text-xs font-bold text-gold-400 uppercase">Premio / Puesto #{w.position}</span>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Número Ganador ({activeRaffle.digits || 4} dígitos)</label>
+                        <input 
+                          type="text" 
+                          required
+                          maxLength={activeRaffle.digits || 4}
+                          placeholder="Ej. 0452"
+                          value={w.number}
+                          onChange={(e) => {
+                            const updated = [...winnersInput];
+                            updated[idx].number = e.target.value;
+                            setWinnersInput(updated);
+                          }}
+                          className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono-num text-sm focus:outline-none focus:border-gold-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Premio Asociado</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={w.prize}
+                          onChange={(e) => {
+                            const updated = [...winnersInput];
+                            updated[idx].prize = e.target.value;
+                            setWinnersInput(updated);
+                          }}
+                          className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-gold-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <button 
+                  type="submit" 
+                  className="w-full py-4 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-black font-extrabold text-base rounded-xl transition shadow-lg">
+                  Publicar Resultados y Cerrar Venta
+                </button>
+              </form>
+            </div>
+          )}
+
+          {adminTab === 'config' && (
+            <form onSubmit={(e) => { e.preventDefault(); DatabaseEngine.saveRaffleConfig(activeRaffle); onRefresh(); showToast("Configuración guardada", "success"); }} className="glass-card p-8 rounded-2xl space-y-6">
+              <h3 className="text-xl font-bold text-white border-b border-gray-800 pb-4">Editar Datos de la Rifa</h3>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Título de la Rifa</label>
+                  <input 
+                    type="text" 
+                    value={activeRaffle.title} 
+                    onChange={(e) => setActiveRaffle({...activeRaffle, title: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">WhatsApp de Administración (sin espacios)</label>
+                  <input 
+                    type="text" 
+                    value={activeRaffle.adminPhone} 
+                    onChange={(e) => setActiveRaffle({...activeRaffle, adminPhone: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white font-mono-num text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Número Inicial del Rango</label>
+                  <input 
+                    type="number" 
+                    value={activeRaffle.startNum} 
+                    onChange={(e) => setActiveRaffle({...activeRaffle, startNum: Number(e.target.value)})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white font-mono-num text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-400 mb-1">Número Final del Rango (ej. 9999)</label>
+                  <input 
+                    type="number" 
+                    value={activeRaffle.endNum} 
+                    onChange={(e) => setActiveRaffle({...activeRaffle, endNum: Number(e.target.value)})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white font-mono-num text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-600/30">
+                Guardar Cambios
+              </button>
+            </form>
+          )}
+
+          {adminTab === 'audit' && (
+            <div className="glass-card p-6 rounded-2xl space-y-4">
+              <h3 className="text-xl font-bold text-white">Historial de Auditoría</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-900 text-gray-400 uppercase border-b border-gray-800">
+                    <tr>
+                      <th className="p-3">Fecha</th>
+                      <th className="p-3">Usuario</th>
+                      <th className="p-3">Acción Registrada</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800 text-gray-300">
+                    {logs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="p-3 text-gray-500 font-mono-num">{new Date(log.timestamp).toLocaleString('es-AR')}</td>
+                        <td className="p-3 font-semibold text-gold-400">{log.user}</td>
+                        <td className="p-3">{log.action}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
